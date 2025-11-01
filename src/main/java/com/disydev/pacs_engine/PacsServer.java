@@ -35,6 +35,8 @@ public class PacsServer {
     private final ApplicationEntity ae = new ApplicationEntity(AE_TITLE);
     private final Connection conn = new Connection();
 
+    private final DatabaseManager dbManager;
+
     public PacsServer() throws IOException {
         device.setDeviceName("PacsServerDevice");
         conn.setPort(PORT);
@@ -44,8 +46,9 @@ public class PacsServer {
         device.addConnection(conn);
         device.addApplicationEntity(ae);
 
-        DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
+        this.dbManager = new DatabaseManager();
 
+        DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
         serviceRegistry.addDicomService(new BasicCEchoSCP());
 
         // --- THE CORRECT C-STORE IMPLEMENTATION ---
@@ -73,6 +76,7 @@ public class PacsServer {
                         Attributes fileMetaInformation = dis.readFileMetaInformation();
                         Attributes dataset = dis.readDataset();
 
+                        dbManager.indexDicomObject(dataset); // <<<< INDEX THE DATA!
                         // Use the metadata to create the final directory path
                         String patientID = dataset.getString(Tag.PatientID, "UNKNOWN_PATIENT");
                         String studyUID = dataset.getString(Tag.StudyInstanceUID, "UNKNOWN_STUDY");
@@ -103,6 +107,9 @@ public class PacsServer {
             }
         });
 
+        System.out.println("Registering C-FIND SCP service...");
+        serviceRegistry.addDicomService(new MyCFindSCP(this.dbManager));
+
         ae.setDimseRQHandler(serviceRegistry);
         ae.addTransferCapability(new TransferCapability(null, "*", TransferCapability.Role.SCP, "*"));
 
@@ -121,6 +128,9 @@ public class PacsServer {
     public void stop() {
         System.out.println("Stopping PACS server...");
         device.unbindConnections();
+        if (dbManager != null){
+            dbManager.close();
+        }
     }
 
     public static void main(String[] args) {
