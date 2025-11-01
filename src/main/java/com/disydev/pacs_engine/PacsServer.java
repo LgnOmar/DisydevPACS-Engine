@@ -35,6 +35,8 @@ public class PacsServer {
     private final ApplicationEntity ae = new ApplicationEntity(AE_TITLE);
     private final Connection conn = new Connection();
 
+    private final DatabaseManager dbManager;
+
     public PacsServer() throws IOException {
         device.setDeviceName("PacsServerDevice");
         conn.setPort(PORT);
@@ -43,6 +45,8 @@ public class PacsServer {
         ae.addConnection(conn);
         device.addConnection(conn);
         device.addApplicationEntity(ae);
+
+        this.dbManager = new DatabaseManager();
 
         DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
 
@@ -73,6 +77,7 @@ public class PacsServer {
                         Attributes fileMetaInformation = dis.readFileMetaInformation();
                         Attributes dataset = dis.readDataset();
 
+                        dbManager.indexDicomObject(dataset); // <<<< INDEX THE DATA!
                         // Use the metadata to create the final directory path
                         String patientID = dataset.getString(Tag.PatientID, "UNKNOWN_PATIENT");
                         String studyUID = dataset.getString(Tag.StudyInstanceUID, "UNKNOWN_STUDY");
@@ -121,6 +126,9 @@ public class PacsServer {
     public void stop() {
         System.out.println("Stopping PACS server...");
         device.unbindConnections();
+        if (dbManager != null){
+            dbManager.close();
+        }
     }
 
     public static void main(String[] args) {
