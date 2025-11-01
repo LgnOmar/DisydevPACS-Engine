@@ -49,7 +49,6 @@ public class PacsServer {
         this.dbManager = new DatabaseManager();
 
         DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
-
         serviceRegistry.addDicomService(new BasicCEchoSCP());
 
         // --- THE CORRECT C-STORE IMPLEMENTATION ---
@@ -107,6 +106,9 @@ public class PacsServer {
                 }
             }
         });
+
+        System.out.println("Registering C-FIND SCP service...");
+        serviceRegistry.addDicomService(new MyCFindSCP(this.dbManager));
 
         ae.setDimseRQHandler(serviceRegistry);
         ae.addTransferCapability(new TransferCapability(null, "*", TransferCapability.Role.SCP, "*"));

@@ -2,8 +2,12 @@ package com.disydev.pacs_engine;
 
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
+import org.dcm4che3.data.VR;
 
 import java.io.File;
+import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -91,6 +95,74 @@ public class DatabaseManager {
         } catch (SQLException e) {
             System.err.println("Failed to index DICOM object: " + e.getMessage());
         }
+    }
+
+    public List<Attributes> queryStudies(Attributes keys) {
+        // --- Technical Explanation ---
+        // This method takes a DICOM Attributes object (the query keys from the C-FIND request)
+        // and dynamically builds a SQL query. It uses a PreparedStatement to prevent SQL injection.
+        // It iterates through the SQL ResultSet and builds a list of DICOM Attributes objects to return.
+        // The '*' in DICOM is a wildcard, so we translate it to the SQL wildcard '%'.
+        // --- Simplified Explanation ---
+        // A doctor gives the librarian a search request form (`keys`). The librarian uses this
+        // form to write a precise search query for the card catalog (the database).
+        // For each matching card found, the librarian creates a new summary card (`Attributes` object)
+        // and adds it to a pile (`List<Attributes>`) to give back to the doctor.
+
+        List<Attributes> resultList = new ArrayList<>();
+
+        StringBuilder sql = new StringBuilder("SELECT * FROM Studies WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        // Dynamically build the WHERE clause based on the provided keys
+        if (keys.containsValue(Tag.PatientName)) {
+            sql.append(" AND PatientName LIKE ?");
+            params.add(keys.getString(Tag.PatientName).replace('*', '%'));
+        }
+        if (keys.containsValue(Tag.PatientID)) {
+            sql.append(" AND PatientID = ?");
+            params.add(keys.getString(Tag.PatientID));
+        }
+        if (keys.containsValue(Tag.StudyDate)) {
+            // Handle date ranges if necessary in a real PACS, for now, exact match
+            sql.append(" AND StudyDate = ?");
+            params.add(keys.getString(Tag.StudyDate));
+        }
+        if (keys.containsValue(Tag.AccessionNumber)) {
+            sql.append(" AND AccessionNumber = ?");
+            params.add(keys.getString(Tag.AccessionNumber));
+        }
+
+        System.out.println("Executing C-FIND query: " + sql);
+
+        try (PreparedStatement pstmt = connection.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                pstmt.setObject(i + 1, params.get(i));
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    Attributes resultAttrs = new Attributes();
+                    resultAttrs.setString(Tag.PatientID, VR.LO, rs.getString("PatientID"));
+                    resultAttrs.setString(Tag.PatientName, VR.PN, rs.getString("PatientName"));
+                    resultAttrs.setString(Tag.StudyInstanceUID, VR.UI, rs.getString("StudyInstanceUID"));
+                    resultAttrs.setString(Tag.StudyDate, VR.DA, rs.getString("StudyDate"));
+                    resultAttrs.setString(Tag.StudyTime, VR.TM, rs.getString("StudyTime"));
+                    resultAttrs.setString(Tag.AccessionNumber, VR.SH, rs.getString("AccessionNumber"));
+                    resultAttrs.setString(Tag.StudyDescription, VR.LO, rs.getString("StudyDescription"));
+
+                    // Add query retrieve level, which is required in a C-FIND response
+                    resultAttrs.setString(Tag.QueryRetrieveLevel, VR.CS, "STUDY");
+
+                    resultList.add(resultAttrs);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error during C-FIND query: " + e.getMessage());
+            // In a real system, you might want to return an error status instead of an empty list
+        }
+
+        return resultList;
     }
 
     public void close() {
