@@ -40,6 +40,19 @@
         </dependency>
 
         <dependency>
+            <groupId>org.dcm4che.tool</groupId>
+            <artifactId>dcm4che-tool-storescp</artifactId>
+            <version>${dcm4che.version}</version>
+        </dependency>
+
+        <!-- The tools have their own dependencies which we need to add -->
+        <dependency>
+            <groupId>org.dcm4che</groupId>
+            <artifactId>dcm4che-imageio</artifactId>
+            <version>${dcm4che.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>${slf4j.version}</version>
